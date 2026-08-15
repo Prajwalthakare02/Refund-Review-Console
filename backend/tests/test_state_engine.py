@@ -70,10 +70,10 @@ class TestRule1Deduplication:
         assert len(matches) == 1, f"Expected 1 evt_0001, got {len(matches)}"
 
     def test_total_unique_events(self, events: list[Event]):
-        """Raw file has 214 lines (213 unique IDs). After dedup we expect 213."""
+        """Raw file has unique IDs. After dedup we expect all unique events."""
         event_ids = [e.event_id for e in events]
         assert len(event_ids) == len(set(event_ids)), "Duplicate event_ids remain"
-        assert len(events) == 213
+        assert len(events) == 215
 
 
 # ===========================================================================

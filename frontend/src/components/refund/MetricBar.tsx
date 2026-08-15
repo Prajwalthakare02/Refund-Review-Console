@@ -42,6 +42,8 @@ export function MetricBar() {
     if (!raw) return undefined;
     const direct = (raw[code] ?? raw[code.toLowerCase()]) as MetricCurrency | undefined;
     if (direct) return direct;
+    const pendingPayout = raw["pending_payout"] as Record<string, MetricCurrency> | undefined;
+    if (pendingPayout?.[code]) return pendingPayout[code];
     const nested = (raw["currencies"] ?? raw["totals"] ?? raw["summary"]) as
       | Record<string, MetricCurrency>
       | MetricCurrency[]

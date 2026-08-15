@@ -43,6 +43,7 @@ export type OrderRow = {
 };
 
 export type OrdersResponse = {
+  orders?: OrderRow[];
   items?: OrderRow[];
   results?: OrderRow[];
   data?: OrderRow[];
@@ -101,7 +102,7 @@ export const postDecision = (
   });
 
 export function rowsOf(res: OrdersResponse | undefined): OrderRow[] {
-  return res?.items ?? res?.results ?? res?.data ?? [];
+  return res?.orders ?? res?.items ?? res?.results ?? res?.data ?? [];
 }
 
 export function formatMinor(minor?: number, currency?: string) {
