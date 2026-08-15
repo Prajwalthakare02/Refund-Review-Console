@@ -81,33 +81,64 @@ The Data Engine (`ingest.py` and `state_engine.py`) parses raw CSV and JSONL exp
 - **Problem**: `received_at` for `refund.succeeded` is logged earlier than `received_at` for `refund.requested`.
 - **Rule**: Ignore `received_at` for state machine ordering. Always sort event timelines by `occurred_at_utc`.
 
+### Rule 13: Support Queue Time Window
+- **Problem**: Rahul's agents need to see all orders with refund activity in the last 7 days from PINNED_NOW, but some old orders may have recent events.
+- **Cutoff**: `SUPPORT_QUEUE_CUTOFF = 2026-08-04T04:30:00Z` (exactly 7 days prior to `PINNED_NOW` UTC: `2026-08-11T04:30:00Z`).
+- **Rule**: An order qualifies for the Support History Queue if **either**:
+  1. `order.placed_at_utc >= SUPPORT_QUEUE_CUTOFF`, **OR**
+  2. Any event belonging to that order has `occurred_at_utc >= SUPPORT_QUEUE_CUTOFF`.
+- This ensures old orders with recent refund activity are still visible to support agents.
+
+### Rule 14: High-Value Threshold Constants
+- **Problem**: Priya requires approval gates on high-value refund requests before outflow.
+- **Rule**: A refund is flagged as high-value if its `amount_minor` meets or exceeds the following thresholds:
+  - **INR**: `HIGH_VALUE_INR_MINOR = 5_000_000` (₹50,000 × 100 paise)
+  - **USD**: `HIGH_VALUE_USD_MINOR = 50_000` ($500 × 100 cents)
+- High-value refunds receive a prominent `🔴 HIGH VALUE` badge in both queue and detail views.
+
+### Rule 15: Agent Decision Overrides
+- **Problem**: After an agent approves or rejects a pending refund in the console, the system must reflect that decision in all state calculations.
+- **Rule**: Manual agent decisions take **absolute precedence** over raw gateway pending state:
+  - **Approved**: The refund transitions from `pending_payout` to `approved` state. It remains counted in `pending_payout_minor` (money is still expected to leave) but is no longer actionable in the Finance Queue.
+  - **Rejected**: The refund is removed from `pending_payout_minor` entirely. The rejected amount is **not** deducted from `remaining_refundable_minor` (the money stays with the company; it was never sent).
+  - **No Decision (default)**: The refund remains in `pending_payout_minor` and is actionable in the Finance Queue.
+- Decisions are stored with `refund_id`, `action`, `reason`, `idempotency_key`, and `recorded_at`.
+
 ---
 
 ## 3. Order State Derivation Formula
 
 ```python
+# Constants
+PINNED_NOW_UTC = "2026-08-11T04:30:00Z"
+SUPPORT_QUEUE_CUTOFF = "2026-08-04T04:30:00Z"  # 7 days prior
+HIGH_VALUE_INR_MINOR = 5_000_000   # ₹50,000 in paise
+HIGH_VALUE_USD_MINOR = 50_000      # $500 in cents
+
 for order in orders:
     total_paid = order.total_amount_minor
     refunded_succeeded = 0
     pending_payout = 0
     
     for refund_id, event_chain in order.events_grouped_by_refund_id():
-        # Sort chain by occurred_at_utc
+        # Sort chain by occurred_at_utc (Rule 12: never by received_at)
         sorted_chain = sorted(event_chain, key=lambda e: e.occurred_at_utc)
         latest_event = sorted_chain[-1]
         
-        # Check if manual decision exists
+        # Rule 15: Agent decisions override raw state
         manual_decision = get_agent_decision(refund_id)
         
         if manual_decision == "rejected":
+            # Rejected: remove from pending, do NOT deduct from remaining
             continue
-        elif manual_decision == "approved" or latest_event.type == "refund.requested":
-            if latest_event.type != "refund.succeeded" and latest_event.type != "refund.failed":
-                pending_payout += latest_event.amount_minor
         elif latest_event.type == "refund.succeeded":
             refunded_succeeded += latest_event.amount_minor
         elif latest_event.type == "refund.failed":
-            pass # Returned to pool
+            pass  # Money returned to refundable pool
+        elif latest_event.type == "refund.requested":
+            # Still pending (or approved but awaiting gateway confirmation)
+            pending_payout += latest_event.amount_minor
             
     remaining_refundable = total_paid - refunded_succeeded - pending_payout
 ```
+

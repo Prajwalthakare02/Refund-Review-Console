@@ -13,7 +13,9 @@ The **Refund Review Console** is a single-screen internal application engineered
 - **Key Requirements**:
   1. **Top Summary Metric**: Real-time total pending payout liability broken down by currency (`INR`, `USD`).
   2. **Finance Outflow Queue**: A dedicated queue displaying *only* active, actionable pending refunds.
-  3. **High-Value Flags**: Prominent visual identification of high-value refund requests requiring sign-off (`>= ₹50,000` or `>= $500`).
+  3. **High-Value Flags**: Prominent visual identification of high-value refund requests requiring sign-off. Exact thresholds in minor units:
+     - **INR**: `>= 5,000,000 paise` (₹50,000 × 100)
+     - **USD**: `>= 50,000 cents` ($500 × 100)
   4. **Ledger Auditability**: Every derived number must map directly back to a chain of raw, verifiable payment gateway events.
 
 ### Persona B: Rahul (Support Lead)
