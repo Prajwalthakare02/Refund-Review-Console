@@ -43,16 +43,17 @@ def _derive_order_status(oss) -> str:
 
 def _serialise_order_summary(oss) -> dict:
     """Serialise an OrderStateSummary to the queue list response shape."""
+    cur = oss.order.currency
     return {
         "order_id": oss.order.order_id,
         "customer_id": oss.order.customer_id,
-        "currency": oss.order.currency,
+        "currency": cur,
         "total_paid_minor": oss.order.total_amount_minor,
-        "total_paid_formatted": _format_amount(
-            oss.order.total_amount_minor, oss.order.currency
-        ),
+        "total_paid_formatted": _format_amount(oss.order.total_amount_minor, cur),
         "refunded_succeeded_minor": oss.refunded_succeeded_minor,
+        "refunded_succeeded_formatted": _format_amount(oss.refunded_succeeded_minor, cur),
         "pending_payout_minor": oss.pending_payout_minor,
+        "pending_payout_formatted": _format_amount(oss.pending_payout_minor, cur),
         "remaining_refundable_minor": oss.remaining_refundable_minor,
         "status": _derive_order_status(oss),
         "placed_at": oss.order.placed_at_utc,

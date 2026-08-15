@@ -310,13 +310,14 @@ def compute_system_metrics(
     """
     Compute system-wide pending payout broken down by currency.
 
-    Only counts refunds in 'pending' or 'approved' status.
+    Counts only refunds in 'pending' status (awaiting agent decision).
+    Approved refunds are tracked separately as authorised-pending-settlement.
     """
     pending_by_currency: dict[str, CurrencyPendingSummary] = {}
 
     for oss in order_states:
         for refund in oss.refunds:
-            if refund.status in ("pending", "approved"):
+            if refund.status == "pending":
                 cur = refund.currency
                 if cur not in pending_by_currency:
                     pending_by_currency[cur] = CurrencyPendingSummary()
