@@ -1,9 +1,10 @@
 import type { OrderFlags } from "@/lib/refund-api";
 
 const PILLS: Array<{ key: keyof OrderFlags; label: string; tone: "warn" | "danger" }> = [
-  { key: "is_high_value", label: "⚠️ High Value", tone: "warn" },
+  { key: "is_high_value", label: "🔴 High Value", tone: "warn" },
   { key: "is_over_refunded", label: "⚠️ Over-refunded", tone: "warn" },
-  { key: "has_chargeback", label: "🚨 Double Loss Risk", tone: "danger" },
+  { key: "has_double_loss_risk", label: "🚨 Double Loss Risk", tone: "danger" },
+  { key: "has_chargeback", label: "⚠️ Chargeback Open", tone: "warn" },
   { key: "has_currency_mismatch", label: "⚠️ Currency Mismatch", tone: "warn" },
   { key: "is_orphan_order", label: "⚠️ Missing Order", tone: "warn" },
 ];

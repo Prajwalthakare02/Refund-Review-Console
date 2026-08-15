@@ -28,7 +28,7 @@ function TimelineRow({
   onDecide: (refundId: string) => void;
 }) {
   const needsDecision =
-    ev.type === "refund.requested" && ev.status === "pending_approval" && !!ev.refund_id;
+    ev.type === "refund.requested" && !!ev.refund_id;
 
   return (
     <li className="relative pl-8">

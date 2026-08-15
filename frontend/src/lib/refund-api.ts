@@ -26,6 +26,7 @@ export type OrderFlags = {
   has_chargeback?: boolean;
   has_currency_mismatch?: boolean;
   is_orphan_order?: boolean;
+  has_double_loss_risk?: boolean;
 };
 
 export type OrderRow = {
