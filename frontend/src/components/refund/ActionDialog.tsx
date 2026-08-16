@@ -1,28 +1,24 @@
 import { useState } from "react";
+import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { postDecision } from "@/lib/refund-api";
 
-export function ActionDialog({
-  refundId,
-  onClose,
-}: {
-  refundId: string;
-  onClose: () => void;
-}) {
+export function ActionDialog({ refundId, onClose }: { refundId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const [action, setAction] = useState<"approve" | "reject">("approve");
   const [reason, setReason] = useState("");
+  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
 
   const mutation = useMutation({
     mutationFn: () =>
       postDecision(refundId, {
         action,
         reason: reason.trim(),
-        idempotency_key: crypto.randomUUID(),
+        idempotency_key: idempotencyKey,
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["orders"] });
-      void qc.invalidateQueries({ queryKey: ["metrics"] });
+      void qc.invalidateQueries({ queryKey: ["metrics-summary"] });
       void qc.invalidateQueries({ queryKey: ["order-detail"] });
       onClose();
     },
@@ -75,9 +71,7 @@ export function ActionDialog({
         />
 
         {mutation.isError && (
-          <p className="mt-2 text-xs text-destructive">
-            {(mutation.error as Error).message}
-          </p>
+          <p className="mt-2 text-xs text-destructive">{(mutation.error as Error).message}</p>
         )}
 
         <div className="mt-5 flex justify-end gap-2">

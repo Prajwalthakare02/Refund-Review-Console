@@ -17,6 +17,9 @@ export type MetricCurrency = {
 };
 
 export type MetricsSummary = Record<string, MetricCurrency> & {
+  pinned_now?: string;
+  pinned_now_ist?: string;
+  pending_payout?: Record<string, MetricCurrency>;
   [k: string]: unknown;
 };
 
@@ -68,9 +71,33 @@ export type OrderDetailData = {
   order_id: string;
   customer_id?: string;
   currency?: string;
+  order?: {
+    order_id: string;
+    customer_id: string;
+    currency: string;
+    total_paid_minor: number;
+    total_paid_formatted: string;
+    placed_at: string;
+    channel: string;
+    region: string;
+  };
+  refunded_succeeded_minor?: number;
+  pending_payout_minor?: number;
+  remaining_refundable_minor?: number;
+  chargeback_amount_minor?: number;
   warnings?: string[];
   timeline?: TimelineEvent[];
   flags?: OrderFlags;
+  refunds?: Array<{
+    refund_id: string;
+    currency: string;
+    amount_minor: number;
+    amount_formatted: string;
+    status: string;
+    reason?: string;
+    failure_code?: string;
+    is_high_value?: boolean;
+  }>;
 };
 
 export const fetchMetrics = () => req<MetricsSummary>("/metrics/summary");

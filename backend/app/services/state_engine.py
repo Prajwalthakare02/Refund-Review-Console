@@ -138,9 +138,9 @@ def derive_order_state(
             continue
 
         if decision and decision.action in ("approve", "approved"):
-            # Approved: still counted in pending (money expected to leave)
-            # but no longer actionable in Finance Queue
-            pending_payout += amount
+            # Approved: no longer actionable in Finance Queue.
+            # Once the agent has approved it, it should stop counting as
+            # pending payout in the review console.
             refund_states.append(RefundState(
                 refund_id=refund_id,
                 order_id=order.order_id,
@@ -359,19 +359,23 @@ def filter_support_queue(
     Support History Queue: orders with any refund activity in the past 7 days.
 
     Rule 13: An order qualifies if:
-      - order.placed_at_utc >= SUPPORT_QUEUE_CUTOFF, OR
-      - any event occurred_at_utc >= SUPPORT_QUEUE_CUTOFF
+      - at least one refund/chargeback event occurred_at_utc >= SUPPORT_QUEUE_CUTOFF
+      - and the order was placed recently OR has recent refund activity
     """
     cutoff = SUPPORT_QUEUE_CUTOFF_ISO
 
     results: list[OrderStateSummary] = []
     for oss in order_states:
-        # Condition 1: Order placed within window
+        recent_refund_activity = any(
+            e.occurred_at_utc >= cutoff
+            and e.type in {"refund.requested", "refund.succeeded", "refund.failed", "chargeback.opened"}
+            for e in oss.events
+        )
+        if not recent_refund_activity:
+            continue
         if oss.order.placed_at_utc and oss.order.placed_at_utc >= cutoff:
             results.append(oss)
             continue
-
-        # Condition 2: Any event within window
         if any(e.occurred_at_utc >= cutoff for e in oss.events):
             results.append(oss)
 

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { MetricBar } from "@/components/refund/MetricBar";
 import { QueueTable } from "@/components/refund/QueueTable";
 import { OrderDetail } from "@/components/refund/OrderDetail";
+import { fetchMetrics } from "@/lib/refund-api";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -28,6 +30,11 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [orderId, setOrderId] = useState<string | null>(null);
+  const { data: metrics } = useQuery({
+    queryKey: ["metrics-summary"],
+    queryFn: fetchMetrics,
+    refetchOnWindowFocus: false,
+  });
 
   return (
     <main className="min-h-screen bg-background">
@@ -41,9 +48,14 @@ function Index() {
               Finance operations · outflow approvals &amp; refund audit
             </p>
           </div>
-          <span className="rounded-full border border-border px-3 py-1 font-mono text-[11px] text-muted-foreground">
-            api :8000
-          </span>
+          <div className="text-right">
+            <div className="rounded-full border border-border px-3 py-1 font-mono text-[11px] text-muted-foreground">
+              api :8000
+            </div>
+            <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+              pinned {metrics?.pinned_now_ist ?? "—"} IST
+            </div>
+          </div>
         </div>
       </header>
 

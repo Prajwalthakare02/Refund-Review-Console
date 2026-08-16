@@ -10,9 +10,12 @@ Holds:
 
 from __future__ import annotations
 
+import json
+import sqlite3
+from pathlib import Path
 from typing import Any, Optional
 
-from app.config import PINNED_NOW_ISO
+from app.config import PINNED_NOW_ISO, _PROJECT_ROOT
 from app.models.schemas import (
     AgentDecision,
     Event,
@@ -36,13 +39,14 @@ class DecisionStore:
     For production, decisions would go into a database with row-level locking.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, db_path: Optional[Path] = None) -> None:
         self._orders: list[Order] = []
         self._events: list[Event] = []
         self._decisions: dict[str, AgentDecision] = {}
         self._idempotency_cache: dict[str, dict[str, Any]] = {}
         self._order_states: list[OrderStateSummary] = []
         self._initialised = False
+        self._db_path = db_path or (_PROJECT_ROOT / "backend" / "data" / "decisions.sqlite3")
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -50,10 +54,61 @@ class DecisionStore:
 
     def initialise(self) -> None:
         """Load data files and derive initial state. Call once at startup."""
+        self._ensure_db()
+        self._load_persisted_decisions()
         self._orders = load_orders()
         self._events = load_events()
         self._rebuild_states()
         self._initialised = True
+
+    def _connect(self) -> sqlite3.Connection:
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(self._db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _ensure_db(self) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS decisions (
+                    refund_id TEXT PRIMARY KEY,
+                    action TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    recorded_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS idempotency_cache (
+                    idempotency_key TEXT PRIMARY KEY,
+                    response_json TEXT NOT NULL
+                )
+                """
+            )
+            conn.commit()
+
+    def _load_persisted_decisions(self) -> None:
+        self._decisions = {}
+        self._idempotency_cache = {}
+        with self._connect() as conn:
+            for row in conn.execute(
+                "SELECT refund_id, action, reason, idempotency_key, recorded_at FROM decisions"
+            ):
+                decision = AgentDecision(
+                    refund_id=row["refund_id"],
+                    action=row["action"],
+                    reason=row["reason"],
+                    idempotency_key=row["idempotency_key"],
+                    recorded_at=row["recorded_at"],
+                )
+                self._decisions[decision.refund_id] = decision
+            for row in conn.execute(
+                "SELECT idempotency_key, response_json FROM idempotency_cache"
+            ):
+                self._idempotency_cache[row["idempotency_key"]] = json.loads(row["response_json"])
 
     def _rebuild_states(self) -> None:
         """Re-derive all order states from scratch using current decisions."""
@@ -94,7 +149,19 @@ class DecisionStore:
 
     def check_idempotency(self, key: str) -> Optional[dict[str, Any]]:
         """Return cached response if this idempotency_key was already processed."""
-        return self._idempotency_cache.get(key)
+        cached = self._idempotency_cache.get(key)
+        if cached is not None:
+            return cached
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT response_json FROM idempotency_cache WHERE idempotency_key = ?",
+                (key,),
+            ).fetchone()
+            if row is None:
+                return None
+            payload = json.loads(row["response_json"])
+            self._idempotency_cache[key] = payload
+            return payload
 
     def record_decision(
         self,
@@ -116,13 +183,6 @@ class DecisionStore:
             recorded_at=PINNED_NOW_ISO,
         )
 
-        # Store decision
-        self._decisions[refund_id] = decision
-
-        # Re-derive all states with updated decisions
-        self._rebuild_states()
-
-        # Build response payload
         response = {
             "success": True,
             "refund_id": refund_id,
@@ -131,8 +191,31 @@ class DecisionStore:
             "idempotency_key": idempotency_key,
         }
 
-        # Cache for idempotency
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO decisions (refund_id, action, reason, idempotency_key, recorded_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(refund_id) DO UPDATE SET
+                    action=excluded.action,
+                    reason=excluded.reason,
+                    idempotency_key=excluded.idempotency_key,
+                    recorded_at=excluded.recorded_at
+                """,
+                (refund_id, action, reason, idempotency_key, PINNED_NOW_ISO),
+            )
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO idempotency_cache (idempotency_key, response_json)
+                VALUES (?, ?)
+                """,
+                (idempotency_key, json.dumps(response)),
+            )
+            conn.commit()
+
+        self._decisions[refund_id] = decision
         self._idempotency_cache[idempotency_key] = response
+        self._rebuild_states()
 
         return response
 

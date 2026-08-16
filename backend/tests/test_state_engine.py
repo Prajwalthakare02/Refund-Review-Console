@@ -7,9 +7,12 @@ Tests run against the real data files to verify production correctness.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.models.schemas import AgentDecision, Event, Order
+from app.services.decision_store import DecisionStore
 from app.services.ingest import (
     _amount_to_minor,
     _normalise_timestamp,
@@ -469,7 +472,7 @@ class TestRule15AgentDecisionOverrides:
         assert state.refunds[0].status == "pending"
 
     def test_approved_stays_in_pending_payout(self):
-        """Approved refund remains counted in pending_payout_minor."""
+        """Approved refund stops counting as pending payout."""
         order, events = self._make_pending_order()
         decisions = {
             "rfnd_test_001": AgentDecision(
@@ -481,8 +484,8 @@ class TestRule15AgentDecisionOverrides:
             )
         }
         state = derive_order_state(order, events, decisions)
-        assert state.pending_payout_minor == 50000, (
-            "Approved refund should still count in pending_payout"
+        assert state.pending_payout_minor == 0, (
+            "Approved refund should no longer count in pending_payout"
         )
         assert state.refunds[0].status == "approved"
 
@@ -546,3 +549,42 @@ class TestSystemMetrics:
             assert isinstance(summary.amount_minor, int), (
                 f"{cur} pending amount is {type(summary.amount_minor)}, expected int"
             )
+
+
+# ===========================================================================
+# Persistence / restart behavior
+# ===========================================================================
+
+class TestDecisionPersistence:
+    """Persisted decisions should survive a store restart."""
+
+    def test_decision_reloads_after_restart(self, tmp_path: Path):
+        db_path = tmp_path / "decisions.sqlite3"
+
+        store1 = DecisionStore(db_path=db_path)
+        store1.initialise()
+
+        pending_refund = None
+        for oss in store1.order_states:
+            for refund in oss.refunds:
+                if refund.status == "pending":
+                    pending_refund = refund.refund_id
+                    break
+            if pending_refund:
+                break
+
+        if pending_refund is None:
+            pytest.skip("No pending refund available for persistence test")
+
+        body = store1.record_decision(
+            refund_id=pending_refund,
+            action="approve",
+            reason="Persistence test",
+            idempotency_key="persist-key-001",
+        )
+
+        store2 = DecisionStore(db_path=db_path)
+        store2.initialise()
+
+        assert store2.get_decision(pending_refund) is not None
+        assert store2.check_idempotency("persist-key-001") == body

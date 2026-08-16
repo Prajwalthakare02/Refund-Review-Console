@@ -33,16 +33,16 @@ Layout & Components:
    - Render a vertical chronological timeline of items from the timeline array:
      * Badge colors based on type: refund.requested (yellow), refund.succeeded (green), refund.failed (red), chargeback.opened (purple).
      * Show occurred_at_utc, amount_minor, refund_id, source, and reason.
-   - If an event is refund.requested and status is pending_approval, display an 'Action Decision' button opening ActionDialog.
+   - If an event is `refund.requested` and that refund's final derived status is still `pending`, display an 'Action Decision' button opening ActionDialog.
 
 4. ActionDialog Component:
    - Popover/Modal to approve or reject a refund:
      * Actions: 'approve' or 'reject' buttons.
      * Required textarea for 'reason'.
-   - On submission, generate client-side idempotency_key using crypto.randomUUID().
+   - On submission, generate one client-side `idempotency_key` per modal session using `crypto.randomUUID()`.
    - POST to /api/refunds/{refund_id}/decision with body: { action, reason, idempotency_key }.
    - Double-Click Safety: Disable the submit button immediately upon click and show a spinner.
-   - On success, close dialog and invalidate TanStack Query keys ('orders', 'metrics', 'order-detail').
+   - On success, close dialog and invalidate TanStack Query keys ('orders', 'metrics-summary', 'order-detail').
 
 Design Requirements:
 - Single-page layout (no react-router page navigation).

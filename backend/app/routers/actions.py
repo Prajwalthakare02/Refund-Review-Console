@@ -62,6 +62,30 @@ def record_decision(refund_id: str, body: DecisionRequest):
             detail=f"Refund {refund_id} not found.",
         )
 
+    current_refund = None
+    for oss in store.order_states:
+        for refund in oss.refunds:
+            if refund.refund_id == refund_id:
+                current_refund = refund
+                break
+        if current_refund is not None:
+            break
+
+    if current_refund is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Refund {refund_id} not found.",
+        )
+
+    if current_refund.status != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Refund {refund_id} is already {current_refund.status} "
+                "and cannot be re-decided."
+            ),
+        )
+
     # Record decision and get response
     response = store.record_decision(
         refund_id=refund_id,

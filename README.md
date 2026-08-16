@@ -2,16 +2,9 @@
 
 Internal tool for finance and support teams to review, audit, and action refund decisions against a two-week payment event log.
 
----
-
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.10+
-- Node.js 18+ / Bun
-
-### 1 — Backend
+### Backend
 
 ```bash
 cd backend
@@ -19,122 +12,53 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-Data files are read from `refund-console-data/orders.csv` and `refund-console-data/events.jsonl` at startup. No database required.
+Data is loaded from `refund-console-data/orders.csv` and `refund-console-data/events.jsonl` at startup. Agent decisions and idempotency keys are persisted in `backend/data/decisions.sqlite3`.
 
-### 2 — Frontend
+### Frontend
 
 ```bash
 cd frontend
-bun install        # or: npm install
-bun run dev        # or: npm run dev
+npm install
+npm run dev
 ```
 
-Opens at `http://localhost:3000`. The Vite dev server proxies `/api/*` to FastAPI on port 8000.
+The app runs at `http://localhost:3000`. The frontend calls the FastAPI base URL directly at `http://localhost:8000/api`, so CORS must be enabled on the backend.
 
-### 3 — Tests
+### Tests
 
 ```bash
 cd backend
-pytest -v          # 77 tests, all pass
+pytest -v
 ```
 
----
+## What it does
+
+- Finance view: actionable pending refunds only.
+- Support view: recent refund history, including approved and rejected items.
+- Order detail: chronological event timeline, flags, warnings, and refund status.
+- Action control: approve/reject with reason and idempotency protection.
+- Summary metric: total pending payout by currency.
 
 ## Architecture
 
-```
-refund-console-data/
-  orders.csv          ← 155 orders (CSV)
-  events.jsonl        ← 217 refund/chargeback events (JSONL)
+- `backend/app/services/ingest.py` parses CSV/JSONL, deduplicates events, and normalises timestamps and amounts.
+- `backend/app/services/state_engine.py` derives truth from the event chains and queue rules.
+- `backend/app/services/decision_store.py` persists decisions and idempotency records in SQLite.
+- `backend/app/routers/*` exposes the API.
+- `frontend/src/components/refund/*` renders the console UI.
 
-backend/
-  app/
-    config.py         ← PINNED_NOW, cutoff constants, high-value thresholds
-    models/
-      schemas.py      ← Pydantic models (Order, Event, RefundState, …)
-    services/
-      ingest.py       ← Parse, deduplicate, normalise to UTC + minor units
-      state_engine.py ← Pure derivation engine (12 anomaly rules)
-      decision_store.py ← In-memory singleton, holds state + decisions
-    routers/
-      metrics.py      ← GET /api/metrics/summary
-      queue.py        ← GET /api/orders, GET /api/orders/{id}
-      actions.py      ← POST /api/refunds/{id}/decision
-    main.py           ← FastAPI app, CORS, lifespan loader
-  tests/
-    test_state_engine.py   ← 46 unit tests (all 12 anomaly rules)
-    test_api_endpoints.py  ← 31 HTTP integration tests
-
-frontend/
-  src/
-    lib/
-      refund-api.ts   ← Typed fetch helpers, rowsOf(), formatMinor()
-    components/refund/
-      MetricBar.tsx   ← Pending payout by currency (INR + USD cards)
-      QueueTable.tsx  ← Tabbed queue (Finance / Support), search, pagination
-      OrderDetail.tsx ← Modal: event timeline, flags, warnings
-      ActionDialog.tsx← Approve / Reject with reason, idempotency guard
-      FlagPills.tsx   ← Risk flag badges
-    routes/
-      index.tsx       ← Main page layout
-```
-
----
-
-## API Reference
+## API
 
 | Method | Path | Description |
-|:---|:---|:---|
+|---|---|---|
 | `GET` | `/api/metrics/summary` | Pending payout totals by currency |
-| `GET` | `/api/orders?view=finance\|support&search=&page=&per_page=` | Paginated order queue |
-| `GET` | `/api/orders/{order_id}` | Full order detail with event timeline |
-| `POST` | `/api/refunds/{refund_id}/decision` | Approve or reject a pending refund |
+| `GET` | `/api/orders?view=finance\|support&search=&page=&per_page=` | Paginated queue |
+| `GET` | `/api/orders/{order_id}` | Full order detail with timeline |
+| `POST` | `/api/refunds/{refund_id}/decision` | Approve or reject a refund |
 
-### Decision request body
+## Notes
 
-```json
-{
-  "action": "approve" | "reject",
-  "reason": "Verified return receipt",
-  "idempotency_key": "<uuid>"
-}
-```
-
----
-
-## Personas
-
-| Persona | View | Key need |
-|:---|:---|:---|
-| **Priya** (Finance Lead) | Finance Outflow Queue | Approve/reject pending refunds, see payout liability |
-| **Rahul** (Support Agent) | Support History View | 7-day audit trail, anomaly flags, order context |
-
----
-
-## Data Anomalies Handled
-
-| Rule | Anomaly | Resolution |
-|:---|:---|:---|
-| 1 | Duplicate `event_id` | First occurrence wins; duplicates silently dropped |
-| 2 | Mixed timezones (UTC Z, +05:30, naive IST) | All normalised to UTC ISO strings |
-| 3 | `amount` float vs `amount_minor` int | All amounts stored as integer minor units (paise/cents) |
-| 4 | Negative amounts | Processed literally; reduce pending payout |
-| 5 | Zero-amount events | Processed; no monetary effect |
-| 6 | Currency mismatch (refund ≠ order currency) | Flagged with warning |
-| 7 | Over-refund (refunded > paid) | Flagged with percentage overage |
-| 8 | State reversal (succeeded → failed) | Last chronological event wins |
-| 9 | Double-loss risk (chargeback + refund) | Flagged 🚨 |
-| 10 | Orphan orders (events with no CSV record) | Placeholder order created |
-| 11 | Cross-gateway relay (same refund across gateways) | Grouped by `refund_id` |
-| 12 | Out-of-order event arrival | Sorted by `occurred_at`, not `received_at` |
-
----
-
-## Constants (pinned for deterministic test output)
-
-```
-PINNED_NOW              = 2026-08-11T04:30:00Z
-SUPPORT_QUEUE_CUTOFF    = 2026-08-04T04:30:00Z  (7 days prior)
-HIGH_VALUE_INR          = 5,000,000 paise  (₹50,000)
-HIGH_VALUE_USD          = 50,000 cents     ($500)
-```
+- All amounts are stored in minor units.
+- All timestamps are normalised to UTC.
+- `PINNED_NOW` is fixed for deterministic output.
+- The project intentionally avoids auth, live updates, and export features.

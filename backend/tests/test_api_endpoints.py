@@ -127,6 +127,15 @@ class TestSupportQueue:
         support = client.get("/api/orders?view=support").json()
         assert support["total"] >= finance["total"]
 
+    def test_support_queue_only_includes_refund_activity(self, client: TestClient):
+        data = client.get("/api/orders?view=support").json()
+        for order in data["orders"]:
+            detail = client.get(f"/api/orders/{order['order_id']}").json()
+            assert any(
+                ev["type"] in {"refund.requested", "refund.succeeded", "refund.failed", "chargeback.opened"}
+                for ev in detail["timeline"]
+            ), f"{order['order_id']} entered support without refund activity"
+
 
 # ===========================================================================
 # GET /api/orders?search=
@@ -302,3 +311,14 @@ class TestDecisionEndpoint:
             },
         )
         assert resp.status_code == 404
+
+    def test_settled_refund_returns_409(self, client: TestClient):
+        resp = client.post(
+            "/api/refunds/rfnd_5040/decision",
+            json={
+                "action": "approve",
+                "reason": "should fail",
+                "idempotency_key": str(uuid.uuid4()),
+            },
+        )
+        assert resp.status_code == 409

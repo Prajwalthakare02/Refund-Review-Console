@@ -49,7 +49,8 @@ Returns system-wide pending financial liability grouped by currency.
 **Response Schema (`200 OK`)**:
 ```json
 {
-  "pinned_now": "2026-08-11T10:00:00+05:30",
+  "pinned_now": "2026-08-11T04:30:00Z",
+  "pinned_now_ist": "2026-08-11T10:00:00+05:30",
   "pending_payout": {
     "INR": {
       "amount_minor": 1845200,
@@ -69,7 +70,7 @@ Returns system-wide pending financial liability grouped by currency.
 Returns paginated, filterable order queue.
 
 **Query Parameters**:
-- `view`: `finance` (default, pending items only) | `support` (all activity within past 7 days)
+- `view`: `finance` (default, pending items only) | `support` (refund and chargeback activity within past 7 days)
 - `search`: String search matching `order_id` or `customer_id`
 - `page`: Integer (default `1`)
 - `per_page`: Integer (default `50`)
@@ -161,5 +162,5 @@ To fix Rahul's complaint regarding agents double-clicking when the UI lags:
    - Disables the action button.
    - Replaces the label with a loading spinner.
    - Generates a client-side UUID `idempotency_key` bound to the active modal session.
-2. **Backend**: The decision handler maintains an in-memory/SQLite cache of processed `idempotency_key`s.
+2. **Backend**: The decision handler maintains a SQLite-backed cache of processed `idempotency_key`s with an in-memory hot cache.
    - If an incoming request carries an `idempotency_key` already present in the cache, the backend bypasses execution and immediately returns the cached `200 OK` response without mutating state a second time.

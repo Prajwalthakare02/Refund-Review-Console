@@ -7,3 +7,7 @@ build/
 venv/
 .env
 node_modules/
+backend/data/
+frontend/.output/
+frontend/.wrangler/
+frontend/.vinxi/

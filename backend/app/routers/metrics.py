@@ -6,6 +6,7 @@ GET /api/metrics/summary
 
 from fastapi import APIRouter
 
+from app.config import PINNED_NOW_IST
 from app.services.decision_store import store
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
@@ -33,6 +34,7 @@ def get_metrics_summary():
     # Enrich with formatted display strings
     response = {
         "pinned_now": metrics.pinned_now,
+        "pinned_now_ist": PINNED_NOW_IST.isoformat(),
         "pending_payout": {},
     }
 

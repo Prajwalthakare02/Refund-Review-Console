@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchMetrics, type MetricCurrency } from "@/lib/refund-api";
+import { fetchMetrics, type MetricCurrency, type MetricsSummary } from "@/lib/refund-api";
 
 const SYMBOLS: Record<string, string> = { INR: "₹", USD: "$" };
 
@@ -33,37 +33,45 @@ function Card({ code, data }: { code: string; data?: MetricCurrency | undefined 
 
 export function MetricBar() {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["metrics"],
+    queryKey: ["metrics-summary"],
     queryFn: fetchMetrics,
   });
 
+  const metrics = data as MetricsSummary | undefined;
+
   const pick = (code: string): MetricCurrency | undefined => {
-    const raw = data as Record<string, unknown> | undefined;
+    const raw = metrics as Record<string, unknown> | undefined;
     if (!raw) return undefined;
     const direct = (raw[code] ?? raw[code.toLowerCase()]) as MetricCurrency | undefined;
     if (direct) return direct;
     const pendingPayout = raw["pending_payout"] as Record<string, MetricCurrency> | undefined;
     if (pendingPayout?.[code]) return pendingPayout[code];
     const nested = (raw["currencies"] ?? raw["totals"] ?? raw["summary"]) as
-      | Record<string, MetricCurrency>
-      | MetricCurrency[]
-      | undefined;
+      Record<string, MetricCurrency> | MetricCurrency[] | undefined;
     if (Array.isArray(nested)) return nested.find((n) => n.currency === code);
     return nested?.[code];
   };
 
   return (
-    <section className="grid gap-3 sm:grid-cols-2">
-      <Card code="INR" data={pick("INR")} />
-      <Card code="USD" data={pick("USD")} />
-      {isLoading && (
-        <p className="col-span-full text-xs text-muted-foreground">Loading metrics…</p>
-      )}
-      {isError && (
-        <p className="col-span-full text-xs text-destructive">
-          Could not reach {`/api/metrics/summary`}.
-        </p>
-      )}
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground shadow-sm">
+        <span className="font-semibold uppercase tracking-wider">Pinned now</span>
+        <span className="font-mono">
+          {metrics?.pinned_now_ist ?? "—"} ({metrics?.pinned_now ?? "—"})
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card code="INR" data={pick("INR")} />
+        <Card code="USD" data={pick("USD")} />
+        {isLoading && (
+          <p className="col-span-full text-xs text-muted-foreground">Loading metrics…</p>
+        )}
+        {isError && (
+          <p className="col-span-full text-xs text-destructive">
+            Could not reach {`/api/metrics/summary`}.
+          </p>
+        )}
+      </div>
     </section>
   );
 }

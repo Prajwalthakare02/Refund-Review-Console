@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchOrderDetail, formatMinor, type TimelineEvent } from "@/lib/refund-api";
+import {
+  fetchOrderDetail,
+  formatMinor,
+  type OrderDetailData,
+  type TimelineEvent,
+} from "@/lib/refund-api";
 import { FlagPills } from "./FlagPills";
 import { ActionDialog } from "./ActionDialog";
 
@@ -21,14 +26,15 @@ const DOTS: Record<string, string> = {
 function TimelineRow({
   ev,
   currency,
+  canAct,
   onDecide,
 }: {
   ev: TimelineEvent;
   currency?: string | undefined;
+  canAct: boolean;
   onDecide: (refundId: string) => void;
 }) {
-  const needsDecision =
-    ev.type === "refund.requested" && !!ev.refund_id;
+  const needsDecision = ev.type === "refund.requested" && !!ev.refund_id;
 
   return (
     <li className="relative pl-8">
@@ -71,7 +77,7 @@ function TimelineRow({
             Reason: <span className="text-foreground">{ev.reason ?? "—"}</span>
           </div>
         </div>
-        {needsDecision && (
+        {needsDecision && canAct && (
           <button
             type="button"
             onClick={() => onDecide(ev.refund_id as string)}
@@ -85,12 +91,27 @@ function TimelineRow({
   );
 }
 
+function Stat({ label, value, subtle }: { label: string; value: string; subtle?: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-background p-3">
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-1 font-mono text-sm font-semibold text-foreground">{value}</div>
+      {subtle && <div className="mt-1 text-xs text-muted-foreground">{subtle}</div>}
+    </div>
+  );
+}
+
 export function OrderDetail({ orderId, onClose }: { orderId: string; onClose: () => void }) {
   const [refundId, setRefundId] = useState<string | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["order-detail", orderId],
     queryFn: () => fetchOrderDetail(orderId),
   });
+  const pendingRefundIds = new Set(
+    (data?.refunds ?? [])
+      .filter((refund) => refund.status === "pending")
+      .map((refund) => refund.refund_id),
+  );
 
   return (
     <div
@@ -105,8 +126,11 @@ export function OrderDetail({ orderId, onClose }: { orderId: string; onClose: ()
           <div>
             <h2 className="font-mono text-lg font-semibold text-foreground">{orderId}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Customer{" "}
-              <span className="font-mono text-foreground">{data?.customer_id ?? "—"}</span>
+              Customer <span className="font-mono text-foreground">{data?.customer_id ?? "—"}</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Placed at{" "}
+              <span className="font-mono text-foreground">{data?.order?.placed_at ?? "—"}</span>
             </p>
             <div className="mt-2">
               <FlagPills flags={data?.flags} />
@@ -122,6 +146,44 @@ export function OrderDetail({ orderId, onClose }: { orderId: string; onClose: ()
         </header>
 
         <div className="space-y-4 p-5">
+          {data?.order && (
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span className="font-semibold uppercase tracking-wider">Derived state</span>
+                <span className="font-mono">
+                  {data.timeline?.length ?? 0} events · {data.refunds?.length ?? 0} refund chains
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Stat
+                  label="Total paid"
+                  value={data.order.total_paid_formatted}
+                  subtle={`${data.order.total_paid_minor.toLocaleString()} minor units`}
+                />
+                <Stat
+                  label="Refunded succeeded"
+                  value={formatMinor(data.refunded_succeeded_minor, data.order.currency)}
+                  subtle={`${(data.refunded_succeeded_minor ?? 0).toLocaleString()} minor units`}
+                />
+                <Stat
+                  label="Pending payout"
+                  value={formatMinor(data.pending_payout_minor, data.order.currency)}
+                  subtle={`${(data.pending_payout_minor ?? 0).toLocaleString()} minor units`}
+                />
+                <Stat
+                  label="Remaining refundable"
+                  value={formatMinor(data.remaining_refundable_minor, data.order.currency)}
+                  subtle={`${(data.remaining_refundable_minor ?? 0).toLocaleString()} minor units`}
+                />
+              </div>
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                Derived from ordered event chains for{" "}
+                <span className="font-mono text-foreground">{data.order.order_id}</span>. Refund
+                states are resolved from `occurred_at_utc`, not arrival order.
+              </div>
+            </section>
+          )}
+
           {!!data?.warnings?.length && (
             <div className="space-y-2">
               {data.warnings.map((w, i) => (
@@ -145,6 +207,7 @@ export function OrderDetail({ orderId, onClose }: { orderId: string; onClose: ()
                   key={i}
                   ev={ev}
                   currency={data.currency}
+                  canAct={!ev.refund_id || pendingRefundIds.has(ev.refund_id)}
                   onDecide={setRefundId}
                 />
               ))}

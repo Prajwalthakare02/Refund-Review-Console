@@ -66,7 +66,7 @@ Living log of all implementation decisions, packages, files, environment variabl
 | `app/models/schemas.py` | Pydantic models: `Order`, `Event`, `RefundState`, `OrderStateSummary`, etc. |
 | `app/services/ingest.py` | CSV + JSONL parser; dedup, timezone norm, minor unit conversion |
 | `app/services/state_engine.py` | Pure derivation engine; 12 anomaly rules; queue filters; metrics |
-| `app/services/decision_store.py` | In-memory singleton; holds states + decisions + idempotency cache |
+| `app/services/decision_store.py` | SQLite-backed decision store; holds states + decisions + idempotency cache |
 | `app/routers/metrics.py` | `GET /api/metrics/summary` |
 | `app/routers/queue.py` | `GET /api/orders`, `GET /api/orders/{id}` |
 | `app/routers/actions.py` | `POST /api/refunds/{id}/decision` |
@@ -119,11 +119,11 @@ DATA_DIR               = refund-console-data/
 | D-02 | Naive timestamps assumed IST; all normalised to UTC |
 | D-03 | All amounts as integer minor units; `round(amount * 100)` |
 | D-04 | Last chronological event determines final refund state |
-| D-05 | Approved = removed from queue, but still in order's `pending_payout_minor` |
+| D-05 | Approved/rejected are removed from Finance queue; Support history retains the decision trail |
 | D-06 | Orphan orders get placeholder with `total=0`, `is_orphan_order=True` |
 | D-07 | Support queue uses OR logic: order OR any event within 7-day window |
-| D-08 | In-memory state; no database needed for static dataset |
-| D-09 | Client-side `crypto.randomUUID()` per click; server caches `key → response` |
+| D-08 | Startup loads persisted decisions/idempotency from SQLite before state rebuild |
+| D-09 | Client-side `crypto.randomUUID()` per click; server caches `key -> response` |
 | D-10 | `PINNED_NOW` constant; `datetime.now()` never called |
 | D-11 | TanStack Query for all data fetching; `onSuccess` invalidates caches |
 | D-12 | No auth; both views accessible via tab toggle |
