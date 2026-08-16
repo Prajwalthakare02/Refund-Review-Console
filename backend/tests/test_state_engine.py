@@ -8,6 +8,7 @@ Tests run against the real data files to verify production correctness.
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -558,33 +559,41 @@ class TestSystemMetrics:
 class TestDecisionPersistence:
     """Persisted decisions should survive a store restart."""
 
-    def test_decision_reloads_after_restart(self, tmp_path: Path):
-        db_path = tmp_path / "decisions.sqlite3"
+    def test_decision_reloads_after_restart(self):
+        # Keep this test independent from Windows temp-directory ACLs. Some
+        # managed Windows environments allow pytest to create tmp_path but
+        # deny pytest's cleanup pass. The ignored backend/data directory is
+        # writable by the application and is removed explicitly below.
+        db_path = Path(__file__).parents[1] / "data" / f".test-decisions-{uuid4().hex}.sqlite3"
 
-        store1 = DecisionStore(db_path=db_path)
-        store1.initialise()
+        try:
+            store1 = DecisionStore(db_path=db_path)
+            store1.initialise()
 
-        pending_refund = None
-        for oss in store1.order_states:
-            for refund in oss.refunds:
-                if refund.status == "pending":
-                    pending_refund = refund.refund_id
+            pending_refund = None
+            for oss in store1.order_states:
+                for refund in oss.refunds:
+                    if refund.status == "pending":
+                        pending_refund = refund.refund_id
+                        break
+                if pending_refund:
                     break
-            if pending_refund:
-                break
 
-        if pending_refund is None:
-            pytest.skip("No pending refund available for persistence test")
+            if pending_refund is None:
+                pytest.skip("No pending refund available for persistence test")
 
-        body = store1.record_decision(
-            refund_id=pending_refund,
-            action="approve",
-            reason="Persistence test",
-            idempotency_key="persist-key-001",
-        )
+            body = store1.record_decision(
+                refund_id=pending_refund,
+                action="approve",
+                reason="Persistence test",
+                idempotency_key=f"persist-key-{uuid4().hex}",
+            )
 
-        store2 = DecisionStore(db_path=db_path)
-        store2.initialise()
+            store2 = DecisionStore(db_path=db_path)
+            store2.initialise()
 
-        assert store2.get_decision(pending_refund) is not None
-        assert store2.check_idempotency("persist-key-001") == body
+            assert store2.get_decision(pending_refund) is not None
+            assert store2.check_idempotency(body["idempotency_key"]) == body
+        finally:
+            for suffix in ("", "-wal", "-shm"):
+                db_path.with_name(db_path.name + suffix).unlink(missing_ok=True)

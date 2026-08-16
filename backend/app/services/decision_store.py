@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 from app.config import PINNED_NOW_ISO, _PROJECT_ROOT
 from app.models.schemas import (
@@ -61,11 +62,15 @@ class DecisionStore:
         self._rebuild_states()
         self._initialised = True
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._db_path)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def _ensure_db(self) -> None:
         with self._connect() as conn:
