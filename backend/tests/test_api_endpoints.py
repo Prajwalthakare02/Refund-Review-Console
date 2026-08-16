@@ -220,6 +220,16 @@ class TestOrderDetail:
         data = client.get("/api/orders/ord_1024").json()
         assert data["flags"]["has_currency_mismatch"] is True
 
+    def test_ord_1004_has_approved_amount(self, client: TestClient):
+        data = client.get("/api/orders/ord_1004").json()
+        assert data["approved_amount_minor"] == 24999
+        assert data["rejected_amount_minor"] == 0
+
+    def test_ord_1001_has_rejected_amount(self, client: TestClient):
+        data = client.get("/api/orders/ord_1001").json()
+        assert data["rejected_amount_minor"] == 129900
+        assert data["approved_amount_minor"] == 0
+
 
 # ===========================================================================
 # POST /api/refunds/{refund_id}/decision — approve/reject + idempotency

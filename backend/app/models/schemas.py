@@ -83,6 +83,8 @@ class OrderStateSummary(BaseModel):
     order: Order
     refunded_succeeded_minor: int = 0
     pending_payout_minor: int = 0
+    approved_decision_minor: int = 0
+    rejected_decision_minor: int = 0
     remaining_refundable_minor: int = 0
     chargeback_amount_minor: int = 0
     flags: OrderFlags = OrderFlags()

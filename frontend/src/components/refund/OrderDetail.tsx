@@ -171,6 +171,16 @@ export function OrderDetail({ orderId, onClose }: { orderId: string; onClose: ()
                   subtle={`${(data.pending_payout_minor ?? 0).toLocaleString()} minor units`}
                 />
                 <Stat
+                  label="Approved amount"
+                  value={formatMinor(data.approved_amount_minor, data.order.currency)}
+                  subtle={`${(data.approved_amount_minor ?? 0).toLocaleString()} minor units`}
+                />
+                <Stat
+                  label="Rejected amount"
+                  value={formatMinor(data.rejected_amount_minor, data.order.currency)}
+                  subtle={`${(data.rejected_amount_minor ?? 0).toLocaleString()} minor units`}
+                />
+                <Stat
                   label="Remaining refundable"
                   value={formatMinor(data.remaining_refundable_minor, data.order.currency)}
                   subtle={`${(data.remaining_refundable_minor ?? 0).toLocaleString()} minor units`}

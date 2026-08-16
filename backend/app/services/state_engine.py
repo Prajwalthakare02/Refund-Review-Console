@@ -89,6 +89,8 @@ def derive_order_state(
 
     refunded_succeeded: int = 0
     pending_payout: int = 0
+    approved_decision: int = 0
+    rejected_decision: int = 0
     chargeback_amount: int = 0
     has_chargeback = False
     has_currency_mismatch = False
@@ -125,6 +127,7 @@ def derive_order_state(
 
         if decision and decision.action in ("reject", "rejected"):
             # Rejected: remove from pending, do NOT deduct from remaining
+            rejected_decision += amount
             refund_states.append(RefundState(
                 refund_id=refund_id,
                 order_id=order.order_id,
@@ -141,6 +144,7 @@ def derive_order_state(
             # Approved: no longer actionable in Finance Queue.
             # Once the agent has approved it, it should stop counting as
             # pending payout in the review console.
+            approved_decision += amount
             refund_states.append(RefundState(
                 refund_id=refund_id,
                 order_id=order.order_id,
@@ -238,6 +242,8 @@ def derive_order_state(
         order=order,
         refunded_succeeded_minor=refunded_succeeded,
         pending_payout_minor=pending_payout,
+        approved_decision_minor=approved_decision,
+        rejected_decision_minor=rejected_decision,
         remaining_refundable_minor=remaining,
         chargeback_amount_minor=chargeback_amount,
         flags=flags,

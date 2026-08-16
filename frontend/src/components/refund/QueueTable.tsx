@@ -116,6 +116,7 @@ export function QueueTable({ onSelect }: { onSelect: (orderId: string) => void }
               <th className="px-3 py-2 text-right font-semibold">Total Paid</th>
               <th className="px-3 py-2 text-right font-semibold">Refunded Succeeded</th>
               <th className="px-3 py-2 text-right font-semibold">Pending Payout</th>
+              <th className="px-3 py-2 text-right font-semibold">Decision Amount</th>
               <th className="px-3 py-2 font-semibold">Status</th>
               <th className="px-3 py-2 font-semibold">Flags</th>
             </tr>
@@ -147,6 +148,13 @@ export function QueueTable({ onSelect }: { onSelect: (orderId: string) => void }
                 <td className="px-3 py-2 text-right font-mono tabular-nums font-semibold text-foreground">
                   {money(r.pending_payout_formatted, r.pending_payout_minor, r.currency)}
                 </td>
+                <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground">
+                  {normalizeStatus(r.status) === "approved"
+                    ? money(r.approved_amount_formatted, r.approved_amount_minor, r.currency)
+                    : normalizeStatus(r.status) === "rejected"
+                      ? money(r.rejected_amount_formatted, r.rejected_amount_minor, r.currency)
+                      : "—"}
+                </td>
                 <td className="px-3 py-2 text-xs">
                   <span
                     className={
@@ -170,7 +178,7 @@ export function QueueTable({ onSelect }: { onSelect: (orderId: string) => void }
             ))}
             {!rows.length && (
               <tr>
-                <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
                   {isLoading
                     ? "Loading orders…"
                     : isError

@@ -41,6 +41,10 @@ export type OrderRow = {
   refunded_succeeded_minor?: number;
   pending_payout_formatted?: string;
   pending_payout_minor?: number;
+  approved_amount_formatted?: string;
+  approved_amount_minor?: number;
+  rejected_amount_formatted?: string;
+  rejected_amount_minor?: number;
   currency?: string;
   status?: string;
   flags?: OrderFlags;
@@ -83,6 +87,8 @@ export type OrderDetailData = {
   };
   refunded_succeeded_minor?: number;
   pending_payout_minor?: number;
+  approved_amount_minor?: number;
+  rejected_amount_minor?: number;
   remaining_refundable_minor?: number;
   chargeback_amount_minor?: number;
   warnings?: string[];
