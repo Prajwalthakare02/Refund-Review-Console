@@ -105,12 +105,14 @@ export const fetchMetrics = () => req<MetricsSummary>("/metrics/summary");
 export const fetchOrders = (p: {
   view: "finance" | "support";
   search: string;
+  status: "all" | "pending" | "approved" | "rejected";
   page: number;
   per_page: number;
 }) => {
   const qs = new URLSearchParams({
     view: p.view,
     search: p.search,
+    status: p.status,
     page: String(p.page),
     per_page: String(p.per_page),
   });

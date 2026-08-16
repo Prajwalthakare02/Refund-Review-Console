@@ -35,15 +35,13 @@ export function QueueTable({ onSelect }: { onSelect: (orderId: string) => void }
   const effectiveStatusFilter = view === "finance" ? "pending" : statusFilter;
 
   const { data, isLoading, isError, isFetching } = useQuery({
-    queryKey: ["orders", view, search, page, PER_PAGE],
-    queryFn: () => fetchOrders({ view, search, page, per_page: PER_PAGE }),
+    queryKey: ["orders", view, search, effectiveStatusFilter, page, PER_PAGE],
+    queryFn: () =>
+      fetchOrders({ view, search, status: effectiveStatusFilter, page, per_page: PER_PAGE }),
     placeholderData: keepPreviousData,
   });
 
-  const rows = rowsOf(data).filter((r) => {
-    if (effectiveStatusFilter === "all") return true;
-    return normalizeStatus(r.status) === effectiveStatusFilter;
-  });
+  const rows = rowsOf(data);
   const total = data?.total;
 
   const money = (fmt: string | undefined, minor: number | undefined, cur?: string) =>

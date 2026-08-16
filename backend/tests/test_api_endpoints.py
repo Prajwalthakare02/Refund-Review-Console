@@ -60,6 +60,10 @@ class TestMetricsSummary:
         data = client.get("/api/metrics/summary").json()
         assert "INR" in data["pending_payout"]
 
+    def test_pending_payout_has_usd(self, client: TestClient):
+        data = client.get("/api/metrics/summary").json()
+        assert "USD" in data["pending_payout"]
+
     def test_pending_amounts_are_integers(self, client: TestClient):
         data = client.get("/api/metrics/summary").json()
         for currency, summary in data["pending_payout"].items():
@@ -135,6 +139,13 @@ class TestSupportQueue:
                 ev["type"] in {"refund.requested", "refund.succeeded", "refund.failed", "chargeback.opened"}
                 for ev in detail["timeline"]
             ), f"{order['order_id']} entered support without refund activity"
+
+    def test_support_status_filter_is_applied_server_side(self, client: TestClient):
+        data = client.get("/api/orders?view=support&status=pending").json()
+        assert data["total"] > 0
+        assert data["orders"], "Expected pending support rows"
+        for order in data["orders"]:
+            assert order["status"] == "pending_approval"
 
 
 # ===========================================================================

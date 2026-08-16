@@ -41,6 +41,15 @@ def _derive_order_status(oss) -> str:
     return "no_refund_activity"
 
 
+def _status_matches(queue_status: str, filter_status: str) -> bool:
+    """Match a derived queue status against the requested UI filter."""
+    if filter_status == "all":
+        return True
+    if filter_status == "pending":
+        return queue_status == "pending_approval"
+    return queue_status == filter_status
+
+
 def _serialise_order_summary(oss) -> dict:
     """Serialise an OrderStateSummary to the queue list response shape."""
     cur = oss.order.currency
@@ -67,6 +76,7 @@ def _serialise_order_summary(oss) -> dict:
 def list_orders(
     view: str = Query("finance", pattern="^(finance|support)$"),
     search: str = Query("", description="Search by order_id or customer_id"),
+    status: str = Query("all", pattern="^(all|pending|approved|rejected)$"),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
 ):
@@ -91,6 +101,12 @@ def list_orders(
             if search_lower in oss.order.order_id.lower()
             or search_lower in oss.order.customer_id.lower()
         ]
+
+    # Apply status filter before pagination so counts and pages stay correct.
+    if view == "finance":
+        queue = [oss for oss in queue if _status_matches(_derive_order_status(oss), "pending")]
+    else:
+        queue = [oss for oss in queue if _status_matches(_derive_order_status(oss), status)]
 
     # Pagination
     total = len(queue)

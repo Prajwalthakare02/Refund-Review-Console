@@ -313,12 +313,15 @@ def compute_system_metrics(
     Counts only refunds in 'pending' status (awaiting agent decision).
     Approved refunds are tracked separately as authorised-pending-settlement.
     """
-    pending_by_currency: dict[str, CurrencyPendingSummary] = {}
+    pending_by_currency: dict[str, CurrencyPendingSummary] = {
+        "INR": CurrencyPendingSummary(),
+        "USD": CurrencyPendingSummary(),
+    }
 
     for oss in order_states:
         for refund in oss.refunds:
             if refund.status == "pending":
-                cur = refund.currency
+                cur = refund.currency.upper()
                 if cur not in pending_by_currency:
                     pending_by_currency[cur] = CurrencyPendingSummary()
 

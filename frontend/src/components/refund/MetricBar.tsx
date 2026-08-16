@@ -1,9 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchMetrics, type MetricCurrency, type MetricsSummary } from "@/lib/refund-api";
+import {
+  fetchMetrics,
+  formatMinor,
+  type MetricCurrency,
+  type MetricsSummary,
+} from "@/lib/refund-api";
 
 const SYMBOLS: Record<string, string> = { INR: "₹", USD: "$" };
 
 function Card({ code, data }: { code: string; data?: MetricCurrency | undefined }) {
+  const display = data ?? { amount_minor: 0, amount_formatted: formatMinor(0, code), count: 0 };
+
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -15,16 +22,16 @@ function Card({ code, data }: { code: string; data?: MetricCurrency | undefined 
         </span>
       </div>
       <div className="mt-3 font-mono text-3xl font-semibold tabular-nums text-foreground">
-        {data?.amount_formatted ?? "—"}
+        {display.amount_formatted}
       </div>
       <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
         <span className="font-mono tabular-nums">
-          {data?.amount_minor?.toLocaleString() ?? "—"}{" "}
+          {display.amount_minor.toLocaleString()}{" "}
           {code === "INR" ? "paise" : code === "USD" ? "cents" : "minor"}
         </span>
         <span className="h-3 w-px bg-border" />
         <span>
-          <span className="font-semibold text-foreground">{data?.count ?? 0}</span> pending
+          <span className="font-semibold text-foreground">{display.count}</span> pending
         </span>
       </div>
     </div>
